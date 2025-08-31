@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -67,13 +68,14 @@ export default function PreviewPage() {
       // Case 1: Data is from the AI generator (already in QuizData format)
       if (parsedData && Array.isArray(parsedData.questions)) {
         setQuizData(parsedData);
+        setXlsxPreviewData(null); // Clear any old XLSX data
       } 
       // Case 2: Data is from an XLSX file (a 2D array)
       else if (parsedData && Array.isArray(parsedData) && Array.isArray(parsedData[0])) {
         setXlsxPreviewData(parsedData); // Keep the raw data for table display
         const convertedData = convertArrayToQuizData(parsedData);
         if (!convertedData) {
-             throw new Error("The file is missing required columns: 'question', 'options', 'correctAnswer'.");
+             throw new Error("The file is missing required columns: 'question', 'options', 'correctAnswer'. Check spelling and casing in the Excel file header.");
         }
         setQuizData(convertedData);
       } else {

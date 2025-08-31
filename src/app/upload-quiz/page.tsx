@@ -9,20 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Download, FileUp, BookOpen } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
-
-/**
- * Converter Loader Page — fixed to correctly decrypt AES-GCM encrypted `.dat` files
- * and fetch the original Excel (.xlsx) data using the passphrase.
- *
- * Flow:
- *  - Upload a `.dat` file
- *  - Provide the passphrase (e.g., "hero")
- *  - The page extracts salt (16B) + iv (12B) + ciphertext + tag(16B)
- *  - Uses PBKDF2-HMAC-SHA256 (100k iterations) → AES-256-GCM to decrypt
- *  - Parses XLSX using SheetJS and shows a preview table of first rows
- */
+import { Loader2, BookOpen } from "lucide-react";
 
 const SALT_SIZE = 16;
 const IV_SIZE = 12;
@@ -134,7 +121,7 @@ export default function ConverterLoaderPage(): JSX.Element {
   }
 
   return (
-    <Card className="w-full max-w-4xl">
+    <Card className="w-full max-w-2xl">
       <CardHeader>
         <CardTitle>Upload Quiz File</CardTitle>
         <CardDescription>
