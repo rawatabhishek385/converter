@@ -53,17 +53,6 @@ export default function TestPanelPage() {
         router.push('/');
     }
   }, [router, toast]);
-  
-  // Effect to handle browser back/forward navigation
-  useEffect(() => {
-    const handlePopState = () => {
-      sessionStorage.removeItem('quizData');
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, []);
 
   const handleAnswerChange = (value: string) => {
     setAnswers((prev) => ({ ...prev, [currentQuestionIndex]: value }));
@@ -100,8 +89,6 @@ export default function TestPanelPage() {
         submittedAt: new Date().toISOString(),
       };
   
-      // We will now append to existing submissions if a file exists.
-      // This is a simplified client-side approach. A real-world app would use a database.
       const passphrase = prompt("Please set a key for the answer sheet file. If the file already exists, use the same key.");
       if (!passphrase) {
         toast({
@@ -115,12 +102,9 @@ export default function TestPanelPage() {
       
       let allSubmissions = [newSubmission];
       
-      // We will use a fixed name for the answer sheet file for simplicity.
       const answerFileName = "answers.dat";
 
       try {
-        // This is a trick to check if the file exists and decrypt it.
-        // We ask the user to upload it if they have it. This is not ideal but works for a local-first app.
         const existingFile = await new Promise<File | null>((resolve) => {
             const input = document.createElement('input');
             input.type = 'file';
@@ -145,7 +129,6 @@ export default function TestPanelPage() {
             }
         }
       } catch (error) {
-        // Ignore if decryption fails or file doesn't exist. We'll create a new file.
         console.warn("Could not load or decrypt existing answer sheet. A new one will be created.", error);
       }
   
@@ -175,7 +158,14 @@ export default function TestPanelPage() {
   
 
   if (!quizData) {
-    return <div>Loading quiz...</div>;
+    return (
+        <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+                <p className="text-lg font-semibold">Loading quiz...</p>
+                <p className="text-sm text-muted-foreground">Please wait while we prepare the test.</p>
+            </div>
+        </div>
+    );
   }
 
   const currentQuestion = quizData.questions[currentQuestionIndex];

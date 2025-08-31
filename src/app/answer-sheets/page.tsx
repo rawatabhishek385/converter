@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { decryptFile } from '@/lib/crypto';
-import { Loader2, UploadCloud, ChevronsUpDown } from 'lucide-react';
+import { Loader2, UploadCloud } from 'lucide-react';
 
 interface AnswerSheet {
   answers: { [key: string]: string };
