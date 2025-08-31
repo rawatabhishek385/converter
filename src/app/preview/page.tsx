@@ -57,30 +57,35 @@ export default function PreviewPage() {
   useEffect(() => {
     try {
       const data = sessionStorage.getItem('quizData');
-      if (data) {
-        const parsedData = JSON.parse(data);
-        
-        // This handles data from both AI generator (already in QuizData format)
-        // and from the XLSX upload (2D array)
-        if (parsedData && Array.isArray(parsedData) && Array.isArray(parsedData[0])) {
-            setXlsxPreviewData(parsedData); // It's from XLSX
-            const convertedData = convertArrayToQuizData(parsedData);
-            if (!convertedData) {
-                 throw new Error("The file is missing required columns: 'question', 'options', 'correctAnswer'.");
-            }
-            setQuizData(convertedData);
-        } else if (parsedData && Array.isArray(parsedData.questions)) {
-          setQuizData(parsedData); // It's from AI Generator
-        } else {
-          throw new Error("The file is valid, but it does not contain any questions.");
+      if (!data) {
+        // No data found, do nothing and let the default "No Quiz to Preview" message show.
+        return;
+      }
+
+      const parsedData = JSON.parse(data);
+      
+      // Case 1: Data is from the AI generator (already in QuizData format)
+      if (parsedData && Array.isArray(parsedData.questions)) {
+        setQuizData(parsedData);
+      } 
+      // Case 2: Data is from an XLSX file (a 2D array)
+      else if (parsedData && Array.isArray(parsedData) && Array.isArray(parsedData[0])) {
+        setXlsxPreviewData(parsedData); // Keep the raw data for table display
+        const convertedData = convertArrayToQuizData(parsedData);
+        if (!convertedData) {
+             throw new Error("The file is missing required columns: 'question', 'options', 'correctAnswer'.");
         }
+        setQuizData(convertedData);
+      } else {
+        // The data is in an unknown or invalid format
+        throw new Error("The provided quiz data is not in a recognized format.");
       }
     } catch (error: any) {
       console.error("Failed to load quiz data for preview:", error);
       toast({
         variant: 'destructive',
         title: 'Failed to Load Preview',
-        description: error.message || 'The quiz data might be corrupted. Please try uploading it again.',
+        description: error.message || 'The quiz data might be corrupted. Please try again.',
       });
       // Clear potentially corrupted data and redirect
       sessionStorage.removeItem('quizData');
@@ -90,8 +95,8 @@ export default function PreviewPage() {
 
   const handleStartTest = () => {
     if (quizData) {
-      // The data is already in sessionStorage, so we just navigate.
-      // But we must ensure it's the final QuizData format, not the array format.
+      // The data is already in sessionStorage, but we ensure it's the final,
+      // converted QuizData format before proceeding.
       sessionStorage.setItem('quizData', JSON.stringify(quizData));
       router.push('/test-panel');
     } else {
@@ -100,16 +105,17 @@ export default function PreviewPage() {
         title: 'No Quiz Data',
         description: 'Something went wrong. Please upload a quiz file again.',
       });
-      router.push('/');
+      router.push('/upload-quiz');
     }
   };
   
   const getPreviewData = () => {
+    // If we have raw XLSX data, use that for the preview table
     if (xlsxPreviewData) {
         return xlsxPreviewData;
     }
+    // Otherwise, convert the AI-generated quiz data back to an array for the table
     if(quizData) {
-        // Convert quizData back to array for preview if needed
         const header = ["question", "options", "correctAnswer"];
         const rows = quizData.questions.map(q => [q.question, q.options.join(','), q.correctAnswer]);
         return [header, ...rows];
@@ -125,11 +131,12 @@ export default function PreviewPage() {
         <CardHeader>
           <CardTitle>No Quiz to Preview</CardTitle>
           <CardDescription>
-            Go to the 'Upload Quiz' page to load a quiz file and see a preview here.
+            Generate a quiz or use the 'Upload Quiz' page to load a quiz file.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button onClick={() => router.push('/upload-quiz')}>Go to Upload Page</Button>
+        <CardContent className="flex gap-4 justify-center">
+          <Button onClick={() => router.push('/')}>Generate Quiz</Button>
+          <Button onClick={() => router.push('/upload-quiz')} variant="outline">Upload Quiz</Button>
         </CardContent>
       </Card>
     );
