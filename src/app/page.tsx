@@ -107,9 +107,9 @@ export default function Home() {
     const a = document.createElement('a');
     a.href = url;
     if (operation === 'encrypt') {
-      a.download = `${originalFileName}.enc`;
+      a.download = `${originalFileName}.dat`;
     } else {
-      a.download = originalFileName.endsWith('.enc')
+      a.download = originalFileName.endsWith('.dat')
         ? originalFileName.slice(0, -4)
         : `decrypted_${originalFileName}`;
     }
