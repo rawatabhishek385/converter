@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ export default function AnswerSheetsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [key, setKey] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [answerSheets, setAnswerSheets] = useState<AnswerSheet[]>([]);
+  const [answerSheet, setAnswerSheet] = useState<AnswerSheet | null>(null);
   const { toast } = useToast();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,22 +39,23 @@ export default function AnswerSheetsPage() {
     }
 
     setIsProcessing(true);
-    setAnswerSheets([]);
+    setAnswerSheet(null);
 
     try {
       const decryptedBlob = await decryptFile(file, key);
       const decryptedText = await decryptedBlob.text();
       const data = JSON.parse(decryptedText);
 
-      if (Array.isArray(data)) {
-        setAnswerSheets(data);
+      // Simple validation to check if it looks like our submission object
+      if (data && typeof data === 'object' && data.answers && data.submittedAt) {
+        setAnswerSheet(data);
       } else {
-        throw new Error("File does not contain a valid list of answer sheets.");
+        throw new Error("File does not contain a valid answer sheet.");
       }
 
       toast({
         title: 'Success!',
-        description: 'Answer sheets loaded.',
+        description: 'Answer sheet loaded.',
       });
 
     } catch (error: any) {
@@ -72,15 +73,15 @@ export default function AnswerSheetsPage() {
     <div className="w-full max-w-4xl space-y-8">
       <Card>
         <CardHeader>
-          <CardTitle>View Answer Sheets</CardTitle>
+          <CardTitle>View Answer Sheet</CardTitle>
           <CardDescription>
-            Upload an encrypted .dat file containing student submissions to view their answers.
+            Upload an encrypted .dat file containing a student submission to view their answers.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 space-y-2">
-              <Label htmlFor="answers-file">Submissions File (.dat)</Label>
+              <Label htmlFor="answers-file">Submission File (.dat)</Label>
               <Input id="answers-file" type="file" accept=".dat" onChange={handleFileChange} />
             </div>
             <div className="flex-1 space-y-2">
@@ -96,41 +97,32 @@ export default function AnswerSheetsPage() {
           </div>
           <Button onClick={handleLoadFile} disabled={isProcessing || !file || !key}>
             {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-            Load and Decrypt Answers
+            Load and Decrypt Answer
           </Button>
         </CardContent>
       </Card>
 
-      {answerSheets.length > 0 && (
+      {answerSheet && (
         <Card>
           <CardHeader>
-            <CardTitle>Review Submissions</CardTitle>
-            <CardDescription>Click on a submission to view the answers.</CardDescription>
+            <CardTitle>Review Submission</CardTitle>
+            <CardDescription>
+              Showing answers from <span className="font-semibold">{file?.name}</span>
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              {answerSheets.map((sheet, index) => (
-                <AccordionItem value={`item-${index}`} key={index}>
-                  <AccordionTrigger>
-                    <div className="flex justify-between w-full pr-4">
-                      <span>Submission {index + 1}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {new Date(sheet.submittedAt).toLocaleString()}
-                      </span>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <ul className="space-y-2 pl-4">
-                      {Object.entries(sheet.answers).map(([qIndex, answer]) => (
-                        <li key={qIndex} className="text-sm">
-                          <span className="font-semibold">Question {parseInt(qIndex) + 1}:</span> {answer || 'Not answered'}
-                        </li>
-                      ))}
-                    </ul>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                Submitted on: {new Date(answerSheet.submittedAt).toLocaleString()}
+              </div>
+              <ul className="space-y-2 rounded-md border p-4">
+                {Object.entries(answerSheet.answers).map(([qIndex, answer]) => (
+                  <li key={qIndex} className="text-sm">
+                    <span className="font-semibold">Question {parseInt(qIndex) + 1}:</span> {answer || 'Not answered'}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </CardContent>
         </Card>
       )}

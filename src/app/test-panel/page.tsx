@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { encryptFile, decryptFile } from '@/lib/crypto';
-import { v4 as uuidv4 } from 'uuid';
+import { encryptFile } from '@/lib/crypto';
+import { format } from 'date-fns';
 
 
 interface Question {
@@ -84,12 +84,13 @@ export default function TestPanelPage() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      const submissionTime = new Date();
       const newSubmission = {
         answers,
-        submittedAt: new Date().toISOString(),
+        submittedAt: submissionTime.toISOString(),
       };
   
-      const passphrase = prompt("Please set a key for the answer sheet file. If the file already exists, use the same key.");
+      const passphrase = prompt("Please set a key for the answer sheet file. This key will be required to view the answers.");
       if (!passphrase) {
         toast({
             variant: "destructive",
@@ -100,46 +101,15 @@ export default function TestPanelPage() {
         return;
       }
       
-      let allSubmissions = [newSubmission];
-      
-      const answerFileName = "answers.dat";
-
-      try {
-        const existingFile = await new Promise<File | null>((resolve) => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.dat';
-            input.onchange = (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                resolve(file || null);
-            };
-            if (confirm("Do you have an existing 'answers.dat' file to add this submission to? If so, select it now.")) {
-                input.click();
-            } else {
-                resolve(null);
-            }
-        });
-
-        if (existingFile) {
-            const decryptedBlob = await decryptFile(existingFile, passphrase);
-            const decryptedText = await decryptedBlob.text();
-            const existingSubmissions = JSON.parse(decryptedText);
-            if (Array.isArray(existingSubmissions)) {
-                allSubmissions = [...existingSubmissions, newSubmission];
-            }
-        }
-      } catch (error) {
-        console.warn("Could not load or decrypt existing answer sheet. A new one will be created.", error);
-      }
-  
-      const submissionFile = new File([JSON.stringify(allSubmissions, null, 2)], 'answers.json', { type: 'application/json' });
+      const submissionFile = new File([JSON.stringify(newSubmission, null, 2)], 'submission.json', { type: 'application/json' });
       const encryptedBlob = await encryptFile(submissionFile, passphrase);
       
-      downloadBlob(encryptedBlob, answerFileName);
+      const fileName = `submission_${format(submissionTime, 'yyyyMMdd_HHmmss')}.dat`;
+      downloadBlob(encryptedBlob, fileName);
 
       toast({
         title: "Test Submitted!",
-        description: `Your answers have been saved to ${answerFileName}. You can view it on the Answer Sheets page. Make sure to remember your key.`,
+        description: `Your answers have been saved to ${fileName}. You can view it on the Answer Sheets page. Make sure to remember your key.`,
         duration: 10000, 
       });
   
