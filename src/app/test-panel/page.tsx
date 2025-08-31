@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { encryptFile } from '@/lib/crypto';
+import { encryptFile, decryptFile } from '@/lib/crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -95,32 +95,78 @@ export default function TestPanelPage() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const submission = {
+      const newSubmission = {
         answers,
         submittedAt: new Date().toISOString(),
       };
   
-      // For simplicity, we'll store the submission data in a local .dat file.
-      // In a real app, you would send this to a server.
-      const passphrase = uuidv4(); // Generate a unique key for this submission.
-      const submissionFile = new File([JSON.stringify([submission])], 'answers.json', { type: 'application/json' });
+      // We will now append to existing submissions if a file exists.
+      // This is a simplified client-side approach. A real-world app would use a database.
+      const passphrase = prompt("Please set a key for the answer sheet file. If the file already exists, use the same key.");
+      if (!passphrase) {
+        toast({
+            variant: "destructive",
+            title: "Submission Canceled",
+            description: "You must provide a key to save your answers.",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      let allSubmissions = [newSubmission];
+      
+      // We will use a fixed name for the answer sheet file for simplicity.
+      const answerFileName = "answers.dat";
+
+      try {
+        // This is a trick to check if the file exists and decrypt it.
+        // We ask the user to upload it if they have it. This is not ideal but works for a local-first app.
+        const existingFile = await new Promise<File | null>((resolve) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.dat';
+            input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                resolve(file || null);
+            };
+            if (confirm("Do you have an existing 'answers.dat' file to add this submission to? If so, select it now.")) {
+                input.click();
+            } else {
+                resolve(null);
+            }
+        });
+
+        if (existingFile) {
+            const decryptedBlob = await decryptFile(existingFile, passphrase);
+            const decryptedText = await decryptedBlob.text();
+            const existingSubmissions = JSON.parse(decryptedText);
+            if (Array.isArray(existingSubmissions)) {
+                allSubmissions = [...existingSubmissions, newSubmission];
+            }
+        }
+      } catch (error) {
+        // Ignore if decryption fails or file doesn't exist. We'll create a new file.
+        console.warn("Could not load or decrypt existing answer sheet. A new one will be created.", error);
+      }
+  
+      const submissionFile = new File([JSON.stringify(allSubmissions, null, 2)], 'answers.json', { type: 'application/json' });
       const encryptedBlob = await encryptFile(submissionFile, passphrase);
       
-      downloadBlob(encryptedBlob, 'answers.dat');
+      downloadBlob(encryptedBlob, answerFileName);
 
       toast({
         title: "Test Submitted!",
-        description: `Your answers have been saved to answers.dat. The key for this file is: ${passphrase}`,
-        duration: 20000, // Keep toast longer to copy key
+        description: `Your answers have been saved to ${answerFileName}. You can view it on the Answer Sheets page. Make sure to remember your key.`,
+        duration: 10000, 
       });
   
       sessionStorage.removeItem('quizData');
       router.push('/answer-sheets');
-    } catch (error) {
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Submission Failed',
-        description: 'There was an error submitting your answers.',
+        description: error.message || 'There was an error submitting your answers.',
       });
     } finally {
       setIsSubmitting(false);
