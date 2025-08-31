@@ -28,35 +28,37 @@ export default function PreviewPage() {
       const data = sessionStorage.getItem('quizData');
       if (data) {
         const parsedData = JSON.parse(data);
-        // Validate the data structure
-        if (parsedData && Array.isArray(parsedData.questions)) {
+        // More robust validation
+        if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
           setQuizData(parsedData);
         } else {
-          throw new Error("Invalid quiz data format.");
+          // This path was being hit incorrectly before.
+          throw new Error("The file is valid, but it does not contain any questions.");
         }
-      } else {
-        // No data, so don't show an error, just guide the user.
-        // The user might navigate to this page directly.
       }
+      // If no data, just render the 'No Quiz' message without an error.
     } catch (error: any) {
       console.error("Failed to load quiz data for preview:", error);
       toast({
         variant: 'destructive',
         title: 'Failed to Load Preview',
-        description: 'The quiz data is corrupted or invalid. Please upload it again.',
+        description: error.message || 'The quiz data might be corrupted. Please try uploading it again.',
       });
-      router.push('/');
+      // Clear potentially corrupted data and redirect
+      sessionStorage.removeItem('quizData');
+      router.push('/upload-quiz');
     }
   }, [router, toast]);
 
   const handleStartTest = () => {
     if (quizData) {
+      // The data is already in sessionStorage, so we just navigate.
       router.push('/test-panel');
     } else {
       toast({
         variant: 'destructive',
         title: 'No Quiz Data',
-        description: 'Please upload a quiz file first to start a test.',
+        description: 'Something went wrong. Please upload a quiz file again.',
       });
       router.push('/');
     }
@@ -68,11 +70,11 @@ export default function PreviewPage() {
         <CardHeader>
           <CardTitle>No Quiz to Preview</CardTitle>
           <CardDescription>
-            Please upload a quiz file on the homepage to see a preview here.
+            Go to the 'Upload Quiz' page to load a quiz file and see a preview here.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={() => router.push('/')}>Go to Uploader</Button>
+          <Button onClick={() => router.push('/upload-quiz')}>Go to Upload Page</Button>
         </CardContent>
       </Card>
     );
