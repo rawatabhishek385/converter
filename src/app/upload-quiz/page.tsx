@@ -117,7 +117,7 @@ export default function QuestionUploader() {
               required
             />
           </div>
-          <Button type="submit" className="w-full" disabled={isProcessing}>
+          <Button type="submit" className="w-full" disabled={isProcessing || !file && !key}>
             {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
             Load Questions
           </Button>
