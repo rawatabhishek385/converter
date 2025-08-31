@@ -110,13 +110,7 @@ export default function ConverterPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    if (operation === 'encrypt') {
-      a.download = `${originalFileName.split('.')[0]}.dat`;
-    } else {
-      a.download = originalFileName.endsWith('.dat')
-        ? originalFileName.slice(0, -4)
-        : `decrypted_${originalFileName}`;
-    }
+    a.download = `decrypted_${originalFileName.replace('.dat', '')}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -136,21 +130,32 @@ export default function ConverterPage() {
 
     setIsProcessing(true);
     try {
-      let resultBlob: Blob;
       if (operation === 'encrypt') {
-        resultBlob = await encryptFile(file, passphrase);
+        const resultBlob = await encryptFile(file, passphrase);
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(resultBlob);
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          sessionStorage.setItem('encryptedData', base64data);
+          sessionStorage.setItem('encryptedDataKey', passphrase);
+          sessionStorage.setItem('encryptedDataName', `${file.name.split('.')[0]}.dat`);
+          router.push('/upload-quiz');
+        };
+
         toast({
           title: 'Encryption Successful',
-          description: 'Your file has been securely encrypted.',
+          description: 'Redirecting to the uploader page...',
         });
-      } else {
-        resultBlob = await decryptFile(file, passphrase);
+
+      } else { // Decrypt
+        const resultBlob = await decryptFile(file, passphrase);
+        downloadBlob(resultBlob, file.name);
         toast({
           title: 'Decryption Successful',
-          description: 'Your file has been decrypted.',
+          description: 'Your file has been decrypted and downloaded.',
         });
       }
-      downloadBlob(resultBlob, file.name);
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -286,7 +291,7 @@ export default function ConverterPage() {
                         <Unlock className="mr-2 h-5 w-5" />
                       )}
                       {operation === 'encrypt'
-                        ? 'Encrypt & Download (.dat)'
+                        ? 'Encrypt & Continue'
                         : 'Decrypt & Download'}
                     </Button>
                   </div>
