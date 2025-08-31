@@ -35,7 +35,13 @@ export default function TestPanelPage() {
     try {
       const data = sessionStorage.getItem('quizData');
       if (data) {
-        setQuizData(JSON.parse(data));
+        const parsedData = JSON.parse(data);
+        // Basic validation
+        if (parsedData && Array.isArray(parsedData.questions)) {
+           setQuizData(parsedData);
+        } else {
+            throw new Error("Invalid quiz data format.");
+        }
       } else {
         toast({
           variant: 'destructive',
@@ -48,7 +54,7 @@ export default function TestPanelPage() {
         toast({
             variant: 'destructive',
             title: 'Failed to load quiz',
-            description: 'The quiz data is corrupted.',
+            description: 'The quiz data is corrupted or invalid. Please upload again.',
         });
         router.push('/');
     }
