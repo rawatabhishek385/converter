@@ -9,7 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, BookOpen } from "lucide-react";
+import { Loader2, BookOpen, Download } from "lucide-react";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+
 
 const SALT_SIZE = 16;
 const IV_SIZE = 12;
@@ -21,6 +23,9 @@ export default function ConverterLoaderPage(): JSX.Element {
   const [file, setFile] = useState<File | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<any[][] | null>(null);
+  const [downloadBlob, setDownloadBlob] = useState<Blob | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -61,7 +66,6 @@ export default function ConverterLoaderPage(): JSX.Element {
 
     const key = await deriveKey(passphrase, salt);
 
-    // Concatenate ciphertext + tag because WebCrypto expects them together
     const ctWithTag = new Uint8Array(ciphertext.length + tag.length);
     ctWithTag.set(ciphertext, 0);
     ctWithTag.set(tag, ciphertext.length);
@@ -76,8 +80,12 @@ export default function ConverterLoaderPage(): JSX.Element {
   }
 
   async function handleLoad() {
+    setError(null);
+    setPreview(null);
+    setDownloadBlob(null);
+
     if (!file) {
-      toast({ variant: "destructive", title: "Please select a file to load."});
+       toast({ variant: "destructive", title: "Please select a file to load."});
       return;
     }
 
@@ -90,13 +98,15 @@ export default function ConverterLoaderPage(): JSX.Element {
     try {
       const buffer = await file.arrayBuffer();
       const decryptedBlob = await decryptDatFile(buffer, passphrase);
+      setDownloadBlob(decryptedBlob);
 
-      // Parse XLSX and show preview
       const arrayBuffer = await decryptedBlob.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      setPreview(jsonData.slice(0, 10)); // preview first 10 rows
       
       sessionStorage.setItem('quizData', JSON.stringify(jsonData));
       
@@ -110,6 +120,7 @@ export default function ConverterLoaderPage(): JSX.Element {
     } catch (err: any) {
       console.error(err);
       const errorMessage = err?.message || String(err);
+      setError(errorMessage);
       toast({
         variant: "destructive",
         title: "Decryption Failed",
@@ -120,44 +131,82 @@ export default function ConverterLoaderPage(): JSX.Element {
     }
   }
 
+  function downloadFile() {
+    if (!downloadBlob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(downloadBlob);
+    a.download = file?.name?.replace(/\.dat$/i, ".xlsx") || "decrypted.xlsx";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   return (
     <Card className="w-full max-w-2xl">
       <CardHeader>
-        <CardTitle>Upload Quiz File</CardTitle>
+        <CardTitle>Upload Encrypted Quiz</CardTitle>
         <CardDescription>
           Select an encrypted <code>.dat</code> quiz file and provide the passphrase to start the test.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="file-upload">Encrypted File (.dat)</Label>
-            <Input
-              id="file-upload"
-              type="file"
-              onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
-              accept=".dat"
-            />
-          </div>
+            <div className="space-y-2">
+                <Label htmlFor="file-upload">Encrypted File (.dat)</Label>
+                <Input
+                    id="file-upload"
+                    type="file"
+                    onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+                    accept=".dat"
+                />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="passphrase">Passphrase / Key</Label>
-            <Input
-              id="passphrase"
-              type="password"
-              value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              placeholder="Enter passphrase for the quiz"
-            />
-          </div>
+            <div className="space-y-2">
+                <Label htmlFor="passphrase">Passphrase / Key</Label>
+                <Input
+                    id="passphrase"
+                    type="password"
+                    value={passphrase}
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    placeholder="Enter passphrase for the quiz"
+                />
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={handleLoad} disabled={loading || !file || !passphrase}>
-              {loading ? <Loader2 className="animate-spin mr-2" /> : <BookOpen className="mr-2"/>}
-              {loading ? "Decrypting..." : "Load & Preview Quiz"}
-            </Button>
-          </div>
+            <div className="flex items-center gap-2">
+                <Button onClick={handleLoad} disabled={loading || !file || !passphrase}>
+                    {loading ? <Loader2 className="animate-spin mr-2" /> : <BookOpen className="mr-2"/>}
+                    {loading ? "Decrypting..." : "Load & Decrypt"}
+                </Button>
+                {downloadBlob && (
+                    <Button variant="outline" onClick={downloadFile}>
+                        <Download className="mr-2" />
+                        Download XLSX
+                    </Button>
+                )}
+            </div>
         </div>
+
+        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+        
+        {preview && (
+            <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-2">Quiz Preview</h3>
+                <div className="overflow-x-auto border rounded-md">
+                    <Table>
+                        <TableBody>
+                        {preview.map((row, i) => (
+                            <TableRow key={i}>
+                            {row.map((cell: any, j: number) => (
+                                <TableCell key={j}>
+                                {String(cell)}
+                                </TableCell>
+                            ))}
+                            </TableRow>
+                        ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+        )}
       </CardContent>
     </Card>
   );
