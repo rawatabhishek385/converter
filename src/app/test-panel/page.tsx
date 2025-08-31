@@ -36,7 +36,6 @@ export default function TestPanelPage() {
       const data = sessionStorage.getItem('quizData');
       if (data) {
         const parsedData = JSON.parse(data);
-        // Basic validation
         if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
            setQuizData(parsedData);
         } else {
