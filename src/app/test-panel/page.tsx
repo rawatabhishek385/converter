@@ -37,10 +37,10 @@ export default function TestPanelPage() {
       if (data) {
         const parsedData = JSON.parse(data);
         // Basic validation
-        if (parsedData && Array.isArray(parsedData.questions)) {
+        if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
            setQuizData(parsedData);
         } else {
-            throw new Error("Invalid quiz data format.");
+            throw new Error("Invalid quiz data format. The 'questions' array is missing or empty.");
         }
       } else {
         toast({
@@ -50,11 +50,12 @@ export default function TestPanelPage() {
         });
         router.push('/');
       }
-    } catch (error) {
+    } catch (error: any) {
+        console.error("Failed to load quiz data:", error);
         toast({
             variant: 'destructive',
             title: 'Failed to load quiz',
-            description: 'The quiz data is corrupted or invalid. Please upload again.',
+            description: error.message || 'The quiz data is corrupted or invalid. Please upload again.',
         });
         router.push('/');
     }
@@ -121,7 +122,8 @@ export default function TestPanelPage() {
   
       sessionStorage.removeItem('quizData');
       router.push('/answer-sheets');
-    } catch (error: any) {
+    } catch (error: any)
+{
       toast({
         variant: 'destructive',
         title: 'Submission Failed',
