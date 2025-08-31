@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -40,11 +41,11 @@ export default function ConverterPage() {
   const [quizJson, setQuizJson] = useState('');
 
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       setFile(event.target.files[0]);
-      setQuizJson('');
     } else {
       setFile(null);
     }
@@ -60,9 +61,6 @@ export default function ConverterPage() {
       });
       const generatedJson = JSON.stringify(result, null, 2);
       setQuizJson(generatedJson);
-      // Create a file object from the JSON
-      const quizFile = new File([generatedJson], `${quizTopic.replace(/\s+/g, '_')}_quiz.json`, { type: 'application/json' });
-      setFile(quizFile);
 
       toast({
         title: 'Quiz Generated!',
@@ -80,6 +78,34 @@ export default function ConverterPage() {
     }
   };
   
+  const handleStartQuiz = () => {
+    if (!quizJson) {
+      toast({
+        variant: 'destructive',
+        title: 'No Quiz Data',
+        description: 'Please generate a quiz first.',
+      });
+      return;
+    }
+    try {
+      // Store in session storage to pass to the preview page
+      sessionStorage.setItem('quizData', quizJson);
+      
+      toast({
+        title: 'Success!',
+        description: 'Quiz data loaded. Redirecting to the preview page.',
+      });
+
+      router.push('/preview');
+    } catch (error) {
+       toast({
+        variant: 'destructive',
+        title: 'Failed to start quiz',
+        description: 'Could not load quiz data into session.',
+      });
+    }
+  };
+
   const downloadBlob = (blob: Blob, originalFileName: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -144,37 +170,33 @@ export default function ConverterPage() {
   );
 
   return (
-      <Card className="w-full max-w-lg">
+      <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">File Converter</CardTitle>
+          <CardTitle className="text-3xl font-bold">QuizApp Tools</CardTitle>
           <CardDescription className="text-muted-foreground">
-            Encrypt and decrypt files, or generate an encrypted quiz file with AI.
+            Generate a quiz with AI or encrypt/decrypt files.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs
-            value={operation}
-            onValueChange={(v) => setOperation(v as Operation)}
+            defaultValue="ai-quiz"
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="encrypt">
-                <Lock className="mr-2 h-4 w-4" />
-                Encrypt
+              <TabsTrigger value="ai-quiz">
+                <Sparkles className="mr-2 h-4 w-4" />
+                AI Quiz Generator
               </TabsTrigger>
-              <TabsTrigger value="decrypt">
-                <Unlock className="mr-2 h-4 w-4" />
-                Decrypt
+              <TabsTrigger value="converter">
+                <Lock className="mr-2 h-4 w-4" />
+                File Converter
               </TabsTrigger>
             </TabsList>
-            <form onSubmit={handleSubmit} className="mt-4">
-              <div className="space-y-6">
-                
-                {operation === 'encrypt' && (
-                  <Card className="bg-muted/50">
+            <TabsContent value="ai-quiz" className="mt-4">
+               <Card className="bg-muted/50">
                     <CardHeader>
                       <CardTitle className="text-lg">AI Quiz Generator</CardTitle>
-                      <CardDescription>Generate a quiz JSON file to encrypt.</CardDescription>
+                      <CardDescription>Generate a quiz JSON file and start the test directly.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
@@ -191,62 +213,86 @@ export default function ConverterPage() {
                         Generate Quiz
                       </Button>
                       {quizJson && (
-                        <div className='space-y-2'>
-                          <Label>Generated Quiz Data (JSON)</Label>
-                          <Textarea value={quizJson} readOnly rows={8} className="font-mono text-xs"/>
+                        <div className='space-y-4 pt-4'>
+                          <div>
+                            <Label>Generated Quiz Data (JSON)</Label>
+                            <Textarea value={quizJson} readOnly rows={8} className="font-mono text-xs"/>
+                          </div>
+                          <Button type="button" onClick={handleStartQuiz} className="w-full">
+                            Start Quiz
+                          </Button>
                         </div>
                       )}
                     </CardContent>
                   </Card>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="file-upload">
-                    {operation === 'encrypt' ? 'File to Encrypt' : 'File to Decrypt (.dat)'}
-                  </Label>
-                  <Input 
-                    id="file-upload" 
-                    type="file" 
-                    onChange={handleFileChange} 
-                    accept={operation === 'decrypt' ? '.dat' : undefined}
-                  />
-                   {file && (
-                    <div className="mt-2 text-sm text-center text-muted-foreground">
-                      Selected: <span className="font-medium text-foreground">{file.name}</span>
+            </TabsContent>
+            <TabsContent value="converter" className="mt-4">
+              <Tabs
+                value={operation}
+                onValueChange={(v) => setOperation(v as Operation)}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="encrypt">
+                    <Lock className="mr-2 h-4 w-4" />
+                    Encrypt
+                  </TabsTrigger>
+                  <TabsTrigger value="decrypt">
+                    <Unlock className="mr-2 h-4 w-4" />
+                    Decrypt
+                  </TabsTrigger>
+                </TabsList>
+                <form onSubmit={handleSubmit} className="mt-4">
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="file-upload">
+                        {operation === 'encrypt' ? 'File to Encrypt' : 'File to Decrypt (.dat)'}
+                      </Label>
+                      <Input 
+                        id="file-upload" 
+                        type="file" 
+                        onChange={handleFileChange} 
+                        accept={operation === 'decrypt' ? '.dat' : undefined}
+                      />
+                      {file && (
+                        <div className="mt-2 text-sm text-center text-muted-foreground">
+                          Selected: <span className="font-medium text-foreground">{file.name}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="passphrase">Passphrase / Key</Label>
-                  <Input
-                    id="passphrase"
-                    type="password"
-                    value={passphrase}
-                    onChange={(e) => setPassphrase(e.target.value)}
-                    placeholder="Enter a strong passphrase"
-                    required
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="passphrase">Passphrase / Key</Label>
+                      <Input
+                        id="passphrase"
+                        type="password"
+                        value={passphrase}
+                        onChange={(e) => setPassphrase(e.target.value)}
+                        placeholder="Enter a strong passphrase"
+                        required
+                      />
+                    </div>
 
-                <Button
-                  type="submit"
-                  className="w-full text-lg py-6"
-                  disabled={isProcessing || !canSubmit}
-                >
-                  {isProcessing ? (
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  ) : operation === 'encrypt' ? (
-                    <Lock className="mr-2 h-5 w-5" />
-                  ) : (
-                    <Unlock className="mr-2 h-5 w-5" />
-                  )}
-                  {operation === 'encrypt'
-                    ? 'Encrypt & Download (.dat)'
-                    : 'Decrypt & Download'}
-                </Button>
-              </div>
-            </form>
+                    <Button
+                      type="submit"
+                      className="w-full text-lg py-6"
+                      disabled={isProcessing || !canSubmit}
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      ) : operation === 'encrypt' ? (
+                        <Lock className="mr-2 h-5 w-5" />
+                      ) : (
+                        <Unlock className="mr-2 h-5 w-5" />
+                      )}
+                      {operation === 'encrypt'
+                        ? 'Encrypt & Download (.dat)'
+                        : 'Decrypt & Download'}
+                    </Button>
+                  </div>
+                </form>
+              </Tabs>
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
