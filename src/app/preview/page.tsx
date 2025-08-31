@@ -24,7 +24,7 @@ function convertArrayToQuizData(data: any[][]): QuizData | null {
     return null; // Should have at least a header and one question
   }
   
-  const headers = data[0].map(h => String(h).toLowerCase().trim());
+  const headers = data[0].map(h => String(h).toLowerCase().trim().replace(/\s+/g, ''));
   const questionIndex = headers.indexOf('question');
   const optionsIndex = headers.indexOf('options');
   const correctIndex = headers.indexOf('correctanswer');
@@ -40,7 +40,9 @@ function convertArrayToQuizData(data: any[][]): QuizData | null {
       options: options,
       correctAnswer: String(row[correctIndex]),
     };
-  }).filter(q => q.question); // Filter out empty rows
+  }).filter(q => q.question && q.question.trim() !== ''); // Filter out empty rows
+
+  if (questions.length === 0) return null;
 
   return { questions };
 }
@@ -57,22 +59,22 @@ export default function PreviewPage() {
       const data = sessionStorage.getItem('quizData');
       if (data) {
         const parsedData = JSON.parse(data);
+        
         // This handles data from both AI generator (already in QuizData format)
         // and from the XLSX upload (2D array)
-        if (parsedData && Array.isArray(parsedData) && parsedData.length > 0) {
-            setXlsxPreviewData(parsedData);
+        if (parsedData && Array.isArray(parsedData) && Array.isArray(parsedData[0])) {
+            setXlsxPreviewData(parsedData); // It's from XLSX
             const convertedData = convertArrayToQuizData(parsedData);
             if (!convertedData) {
-                 throw new Error("The Excel file is missing required columns: 'question', 'options', 'correctAnswer'.");
+                 throw new Error("The file is missing required columns: 'question', 'options', 'correctAnswer'.");
             }
             setQuizData(convertedData);
-        } else if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
-          setQuizData(parsedData);
+        } else if (parsedData && Array.isArray(parsedData.questions)) {
+          setQuizData(parsedData); // It's from AI Generator
         } else {
           throw new Error("The file is valid, but it does not contain any questions.");
         }
       }
-      // If no data, just render the 'No Quiz' message without an error.
     } catch (error: any) {
       console.error("Failed to load quiz data for preview:", error);
       toast({
@@ -133,7 +135,7 @@ export default function PreviewPage() {
     );
   }
   
-  const tableHeaders = previewData[0];
+  const tableHeaders = previewData[0] || [];
   const tableRows = previewData.slice(1);
 
   return (
