@@ -2,16 +2,30 @@
 "use client";
 
 import React, { useState } from "react";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Download, FileUp, Trash2 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+import { Loader2, Download, FileUp, BookOpen } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
+
+/**
+ * Converter Loader Page — fixed to correctly decrypt AES-GCM encrypted `.dat` files
+ * and fetch the original Excel (.xlsx) data using the passphrase.
+ *
+ * Flow:
+ *  - Upload a `.dat` file
+ *  - Provide the passphrase (e.g., "hero")
+ *  - The page extracts salt (16B) + iv (12B) + ciphertext + tag(16B)
+ *  - Uses PBKDF2-HMAC-SHA256 (100k iterations) → AES-256-GCM to decrypt
+ *  - Parses XLSX using SheetJS and shows a preview table of first rows
+ */
 
 const SALT_SIZE = 16;
 const IV_SIZE = 12;
+const TAG_SIZE = 16;
 const PBKDF2_ITERATIONS = 100000;
 const KEY_LENGTH = 256;
 
@@ -19,9 +33,9 @@ export default function ConverterLoaderPage(): JSX.Element {
   const [file, setFile] = useState<File | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [loading, setLoading] = useState(false);
-  const [outputText, setOutputText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [decryptedBlob, setDecryptedBlob] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<any[][] | null>(null);
+  const [downloadableBlob, setDownloadableBlob] = useState<Blob | null>(null);
   const { toast } = useToast();
 
   async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
@@ -48,124 +62,107 @@ export default function ConverterLoaderPage(): JSX.Element {
     );
   }
 
-  async function tryDecrypt(buffer: ArrayBuffer, passphrase: string, fileType?: string) {
+  async function decryptDatFile(buffer: ArrayBuffer, passphrase: string): Promise<Blob> {
     const u8 = new Uint8Array(buffer);
-    if (u8.length < SALT_SIZE + IV_SIZE + 1) {
-      throw new Error("File too small to contain salt + iv + content");
+    if (u8.length < SALT_SIZE + IV_SIZE + TAG_SIZE + 1) {
+      throw new Error("File too small to contain salt + iv + ciphertext + tag");
     }
 
     const salt = u8.slice(0, SALT_SIZE);
     const iv = u8.slice(SALT_SIZE, SALT_SIZE + IV_SIZE);
-    const encrypted = u8.slice(SALT_SIZE + IV_SIZE);
+    const ciphertext = u8.slice(SALT_SIZE + IV_SIZE, u8.length - TAG_SIZE);
+    const tag = u8.slice(u8.length - TAG_SIZE);
 
     const key = await deriveKey(passphrase, salt);
+
+    // Concatenate ciphertext + tag because WebCrypto expects them together
+    const ctWithTag = new Uint8Array(ciphertext.length + tag.length);
+    ctWithTag.set(ciphertext, 0);
+    ctWithTag.set(tag, ciphertext.length);
 
     const decryptedBuffer = await window.crypto.subtle.decrypt(
       { name: "AES-GCM", iv },
       key,
-      encrypted
+      ctWithTag
     );
 
-    const blob = new Blob([decryptedBuffer], { type: fileType || "application/octet-stream" });
-    return blob;
-  }
-
-  function looksBinaryText(text: string) {
-    // detect lots of low ASCII control chars -> treat as binary
-    return /[\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0B\x0C\x0E-\x1F]/.test(text);
+    return new Blob([decryptedBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   }
 
   async function handleLoad() {
     setError(null);
-    setOutputText(null);
-    setDecryptedBlob(null);
+    setPreview(null);
+    setDownloadableBlob(null);
 
     if (!file) {
       setError("Please select a file to load.");
       return;
     }
 
+    if (!passphrase) {
+      setError("Please provide a passphrase.");
+      return;
+    }
+
     setLoading(true);
     try {
       const buffer = await file.arrayBuffer();
+      const decryptedBlob = await decryptDatFile(buffer, passphrase);
+      setDownloadableBlob(decryptedBlob);
 
-      const maybeText = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
-      const isBinary = looksBinaryText(maybeText);
+      // Parse XLSX and show preview
+      const arrayBuffer = await decryptedBlob.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      setPreview(jsonData.slice(0, 10)); // preview first 10 rows
+      
+      toast({
+        title: "Success!",
+        description: "File decrypted and preview loaded.",
+      });
 
-      if (!isBinary) {
-        setOutputText(maybeText);
-        setDecryptedBlob(new Blob([buffer], { type: file.type || "text/plain" }));
-        setLoading(false);
-        return;
-      }
-
-      if (!passphrase || passphrase.trim().length === 0) {
-        setError("File looks binary/encrypted. Provide the passphrase/key to decrypt.");
-        setLoading(false);
-        return;
-      }
-
-      const decrypted = await tryDecrypt(buffer, passphrase, file.type);
-      const decText = await decrypted.text();
-      const decIsBinary = looksBinaryText(decText);
-
-      if (!decIsBinary) {
-        setOutputText(decText);
-        setDecryptedBlob(decrypted);
-      } else {
-        const arr = new Uint8Array(await decrypted.arrayBuffer());
-        const previewLen = Math.min(256, arr.length);
-        const hexPreview = Array.from(arr.slice(0, previewLen))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join(" ");
-        setOutputText(`[binary output — first ${previewLen} bytes as hex]\n${hexPreview}`);
-        setDecryptedBlob(decrypted);
-      }
-      toast({ title: "Success!", description: "File processed successfully." });
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || String(err));
-      toast({ variant: "destructive", title: "Processing Failed", description: err?.message || String(err) });
+      const errorMessage = err?.message || String(err);
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Decryption Failed",
+        description: errorMessage,
+      });
     } finally {
       setLoading(false);
     }
   }
 
-  function resetAll() {
-    setFile(null);
-    setPassphrase("");
-    setOutputText(null);
-    setDecryptedBlob(null);
-    setError(null);
-  }
-
-  function downloadBlob(blob: Blob, filename?: string) {
+  function downloadFile() {
+    if (!downloadableBlob) return;
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename || (file?.name?.replace(/\.dat$/i, ".dec") || "download.bin");
-    document.body.appendChild(a);
+    a.href = URL.createObjectURL(downloadableBlob);
+a.download = file?.name?.replace(/\.dat$/i, ".xlsx") || "decrypted.xlsx";
     a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    URL.revokeObjectURL(a.href);
   }
 
   return (
-    <Card className="w-full max-w-2xl">
+    <Card className="w-full max-w-4xl">
       <CardHeader>
-        <CardTitle>File Decryptor & Viewer</CardTitle>
+        <CardTitle>Converter — Decrypt & Load XLSX</CardTitle>
         <CardDescription>
-          Select an encrypted file (e.g., <code>.dat</code>). If it was encrypted with a
-          passphrase/key, provide it below to view the decrypted content.
+          Select an encrypted <code>.dat</code> file and provide the passphrase to view the original Excel content.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="file-upload">File</Label>
+            <Label htmlFor="file-upload">Encrypted File (.dat)</Label>
             <Input
               id="file-upload"
               type="file"
               onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+              accept=".dat"
             />
           </div>
 
@@ -176,23 +173,19 @@ export default function ConverterLoaderPage(): JSX.Element {
               type="password"
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
-              placeholder="Enter passphrase (if required for decryption)"
+              placeholder="Enter passphrase (e.g., hero)"
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={handleLoad} disabled={loading || !file}>
-              {loading ? <Loader2 className="animate-spin" /> : <FileUp />}
-              {loading ? "Loading..." : "Load & Decrypt"}
+            <Button onClick={handleLoad} disabled={loading || !file || !passphrase}>
+              {loading ? <Loader2 className="animate-spin" /> : <BookOpen />}
+              {loading ? "Decrypting..." : "Load & Decrypt"}
             </Button>
 
-            <Button variant="outline" onClick={resetAll} disabled={loading}>
-              <Trash2 /> Reset
-            </Button>
-
-            {decryptedBlob && (
-              <Button variant="secondary" onClick={() => downloadBlob(decryptedBlob)}>
-                <Download /> Download Decrypted
+            {downloadableBlob && (
+              <Button variant="secondary" onClick={downloadFile}>
+                <Download /> Download XLSX
               </Button>
             )}
           </div>
@@ -204,15 +197,30 @@ export default function ConverterLoaderPage(): JSX.Element {
           </div>
         )}
 
-        {outputText && (
-          <div className="mt-4 space-y-2">
-            <Label>Output Preview</Label>
-            <Textarea
-              readOnly
-              value={outputText}
-              className="h-64 font-mono text-xs"
-              placeholder="Decrypted text will appear here..."
-            />
+        {preview && (
+          <div className="mt-6">
+            <CardTitle className="text-lg mb-2">Excel Data Preview</CardTitle>
+            <div className="border rounded-md">
+              <Table>
+                <TableCaption>Showing the first 10 rows of the decrypted Excel file.</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    {preview[0]?.map((head, i) => (
+                      <TableHead key={i}>{String(head)}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.slice(1).map((row, i) => (
+                    <TableRow key={i}>
+                      {row.map((cell: any, j: number) => (
+                        <TableCell key={j}>{String(cell)}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         )}
       </CardContent>
