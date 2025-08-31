@@ -7,11 +7,11 @@ import { Button } from './ui/button';
 import { FileQuestion, FileUp, Files, BookOpenCheck, ListChecks } from 'lucide-react';
 
 const navLinks = [
-  { href: '/', label: 'Upload Quiz', icon: FileUp },
+  { href: '/', label: 'Converter', icon: BookOpenCheck },
+  { href: '/upload-quiz', label: 'Upload Quiz', icon: FileUp },
   { href: '/preview', label: 'Preview', icon: ListChecks },
   { href: '/test-panel', label: 'Test Panel', icon: FileQuestion },
   { href: '/answer-sheets', label: 'Answer Sheets', icon: Files },
-  { href: '/converter', label: 'Converter', icon: BookOpenCheck },
 ];
 
 export function Navbar() {
