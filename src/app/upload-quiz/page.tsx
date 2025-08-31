@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,9 +34,7 @@ export default function ConverterLoaderPage(): JSX.Element {
   const [file, setFile] = useState<File | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<any[][] | null>(null);
-  const [downloadableBlob, setDownloadableBlob] = useState<Blob | null>(null);
+  const router = useRouter();
   const { toast } = useToast();
 
   async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
@@ -90,17 +89,13 @@ export default function ConverterLoaderPage(): JSX.Element {
   }
 
   async function handleLoad() {
-    setError(null);
-    setPreview(null);
-    setDownloadableBlob(null);
-
     if (!file) {
-      setError("Please select a file to load.");
+      toast({ variant: "destructive", title: "Please select a file to load."});
       return;
     }
 
     if (!passphrase) {
-      setError("Please provide a passphrase.");
+       toast({ variant: "destructive", title: "Please provide a passphrase."});
       return;
     }
 
@@ -108,7 +103,6 @@ export default function ConverterLoaderPage(): JSX.Element {
     try {
       const buffer = await file.arrayBuffer();
       const decryptedBlob = await decryptDatFile(buffer, passphrase);
-      setDownloadableBlob(decryptedBlob);
 
       // Parse XLSX and show preview
       const arrayBuffer = await decryptedBlob.arrayBuffer();
@@ -116,17 +110,19 @@ export default function ConverterLoaderPage(): JSX.Element {
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-      setPreview(jsonData.slice(0, 10)); // preview first 10 rows
+      
+      sessionStorage.setItem('quizData', JSON.stringify(jsonData));
       
       toast({
         title: "Success!",
-        description: "File decrypted and preview loaded.",
+        description: "File decrypted. Redirecting to preview.",
       });
+
+      router.push('/preview');
 
     } catch (err: any) {
       console.error(err);
       const errorMessage = err?.message || String(err);
-      setError(errorMessage);
       toast({
         variant: "destructive",
         title: "Decryption Failed",
@@ -137,21 +133,12 @@ export default function ConverterLoaderPage(): JSX.Element {
     }
   }
 
-  function downloadFile() {
-    if (!downloadableBlob) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(downloadableBlob);
-a.download = file?.name?.replace(/\.dat$/i, ".xlsx") || "decrypted.xlsx";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
   return (
     <Card className="w-full max-w-4xl">
       <CardHeader>
-        <CardTitle>Converter — Decrypt & Load XLSX</CardTitle>
+        <CardTitle>Upload Quiz File</CardTitle>
         <CardDescription>
-          Select an encrypted <code>.dat</code> file and provide the passphrase to view the original Excel content.
+          Select an encrypted <code>.dat</code> quiz file and provide the passphrase to start the test.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -173,56 +160,17 @@ a.download = file?.name?.replace(/\.dat$/i, ".xlsx") || "decrypted.xlsx";
               type="password"
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
-              placeholder="Enter passphrase (e.g., hero)"
+              placeholder="Enter passphrase for the quiz"
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleLoad} disabled={loading || !file || !passphrase}>
-              {loading ? <Loader2 className="animate-spin" /> : <BookOpen />}
-              {loading ? "Decrypting..." : "Load & Decrypt"}
+              {loading ? <Loader2 className="animate-spin mr-2" /> : <BookOpen className="mr-2"/>}
+              {loading ? "Decrypting..." : "Load & Preview Quiz"}
             </Button>
-
-            {downloadableBlob && (
-              <Button variant="secondary" onClick={downloadFile}>
-                <Download /> Download XLSX
-              </Button>
-            )}
           </div>
         </div>
-
-        {error && (
-          <div className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        {preview && (
-          <div className="mt-6">
-            <CardTitle className="text-lg mb-2">Excel Data Preview</CardTitle>
-            <div className="border rounded-md">
-              <Table>
-                <TableCaption>Showing the first 10 rows of the decrypted Excel file.</TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    {preview[0]?.map((head, i) => (
-                      <TableHead key={i}>{String(head)}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {preview.slice(1).map((row, i) => (
-                    <TableRow key={i}>
-                      {row.map((cell: any, j: number) => (
-                        <TableCell key={j}>{String(cell)}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

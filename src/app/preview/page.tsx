@@ -18,8 +18,37 @@ interface QuizData {
   questions: Question[];
 }
 
+// Helper function to convert 2D array from xlsx to the QuizData format
+function convertArrayToQuizData(data: any[][]): QuizData | null {
+  if (!data || data.length < 2) {
+    return null; // Should have at least a header and one question
+  }
+  
+  const headers = data[0].map(h => String(h).toLowerCase().trim());
+  const questionIndex = headers.indexOf('question');
+  const optionsIndex = headers.indexOf('options');
+  const correctIndex = headers.indexOf('correctanswer');
+
+  if (questionIndex === -1 || optionsIndex === -1 || correctIndex === -1) {
+    return null; // Missing required columns
+  }
+
+  const questions: Question[] = data.slice(1).map(row => {
+    const options = String(row[optionsIndex]).split(',').map(opt => opt.trim());
+    return {
+      question: String(row[questionIndex]),
+      options: options,
+      correctAnswer: String(row[correctIndex]),
+    };
+  }).filter(q => q.question); // Filter out empty rows
+
+  return { questions };
+}
+
+
 export default function PreviewPage() {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
+  const [xlsxPreviewData, setXlsxPreviewData] = useState<any[][] | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -28,11 +57,18 @@ export default function PreviewPage() {
       const data = sessionStorage.getItem('quizData');
       if (data) {
         const parsedData = JSON.parse(data);
-        // More robust validation
-        if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
+        // This handles data from both AI generator (already in QuizData format)
+        // and from the XLSX upload (2D array)
+        if (parsedData && Array.isArray(parsedData) && parsedData.length > 0) {
+            setXlsxPreviewData(parsedData);
+            const convertedData = convertArrayToQuizData(parsedData);
+            if (!convertedData) {
+                 throw new Error("The Excel file is missing required columns: 'question', 'options', 'correctAnswer'.");
+            }
+            setQuizData(convertedData);
+        } else if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
           setQuizData(parsedData);
         } else {
-          // This path was being hit incorrectly before.
           throw new Error("The file is valid, but it does not contain any questions.");
         }
       }
@@ -53,6 +89,8 @@ export default function PreviewPage() {
   const handleStartTest = () => {
     if (quizData) {
       // The data is already in sessionStorage, so we just navigate.
+      // But we must ensure it's the final QuizData format, not the array format.
+      sessionStorage.setItem('quizData', JSON.stringify(quizData));
       router.push('/test-panel');
     } else {
       toast({
@@ -63,8 +101,23 @@ export default function PreviewPage() {
       router.push('/');
     }
   };
+  
+  const getPreviewData = () => {
+    if (xlsxPreviewData) {
+        return xlsxPreviewData;
+    }
+    if(quizData) {
+        // Convert quizData back to array for preview if needed
+        const header = ["question", "options", "correctAnswer"];
+        const rows = quizData.questions.map(q => [q.question, q.options.join(','), q.correctAnswer]);
+        return [header, ...rows];
+    }
+    return null;
+  }
 
-  if (!quizData) {
+  const previewData = getPreviewData();
+
+  if (!previewData) {
     return (
       <Card className="w-full max-w-lg text-center">
         <CardHeader>
@@ -79,6 +132,9 @@ export default function PreviewPage() {
       </Card>
     );
   }
+  
+  const tableHeaders = previewData[0];
+  const tableRows = previewData.slice(1);
 
   return (
     <Card className="w-full max-w-4xl">
@@ -94,19 +150,17 @@ export default function PreviewPage() {
             <TableCaption>A list of the questions in your quiz.</TableCaption>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">#</TableHead>
-                <TableHead>Question</TableHead>
-                <TableHead>Options</TableHead>
-                <TableHead className="text-right">Correct Answer</TableHead>
+                 {tableHeaders.map((head: any, i: number) => (
+                    <TableHead key={i}>{String(head)}</TableHead>
+                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {quizData.questions.map((q, index) => (
+              {tableRows.map((row, index) => (
                 <TableRow key={index}>
-                  <TableCell className="font-medium">{index + 1}</TableCell>
-                  <TableCell>{q.question}</TableCell>
-                  <TableCell>{q.options.join(', ')}</TableCell>
-                  <TableCell className="text-right">{q.correctAnswer}</TableCell>
+                    {row.map((cell: any, j: number) => (
+                        <TableCell key={j} className="font-medium">{String(cell)}</TableCell>
+                    ))}
                 </TableRow>
               ))}
             </TableBody>
@@ -114,7 +168,7 @@ export default function PreviewPage() {
         </div>
       </CardContent>
       <CardFooter className="flex justify-end">
-        <Button onClick={handleStartTest}>
+        <Button onClick={handleStartTest} disabled={!quizData}>
           Start Test <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </CardFooter>
