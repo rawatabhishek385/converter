@@ -40,15 +40,15 @@ export default function QuestionUploader() {
       const decryptedText = await decryptedBlob.text();
       const quizData = JSON.parse(decryptedText);
 
-      // Store in session storage to pass to the next page
+      // Store in session storage to pass to the preview page
       sessionStorage.setItem('quizData', JSON.stringify(quizData));
       
       toast({
         title: 'Success!',
-        description: 'Quiz data loaded successfully. Redirecting to the test panel.',
+        description: 'Quiz data loaded. Redirecting to the preview page.',
       });
 
-      router.push('/test-panel');
+      router.push('/preview');
 
     } catch (error: any) {
       toast({
