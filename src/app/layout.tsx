@@ -1,10 +1,11 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import {Toaster} from '@/components/ui/toaster';
+import {Navbar} from '@/components/navbar';
 
 export const metadata: Metadata = {
-  title: 'CipherFile',
-  description: 'Encrypt and decrypt your files securely.',
+  title: 'QuizApp',
+  description: 'Create, take, and review quizzes.',
 };
 
 export default function RootLayout({
@@ -23,7 +24,10 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        {children}
+        <Navbar />
+        <main className="flex min-h-[calc(100vh-4rem)] w-full flex-col items-center justify-center bg-background p-4">
+          {children}
+        </main>
         <Toaster />
       </body>
     </html>
