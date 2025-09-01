@@ -84,7 +84,9 @@ export async function decryptFile(
       encryptedContent
     );
 
-    const decryptedBlob = new Blob([decryptedContent], { type: file.type });
+    const decryptedBlob = new Blob([decryptedContent], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
     return decryptedBlob;
   } catch (error) {
     console.error("Decryption error:", error);
