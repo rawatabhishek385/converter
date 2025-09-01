@@ -4,8 +4,8 @@ import {Toaster} from '@/components/ui/toaster';
 import {Navbar} from '@/components/navbar';
 
 export const metadata: Metadata = {
-  title: 'QuizApp',
-  description: 'Create, take, and review quizzes.',
+  title: 'File Converter',
+  description: 'Decrypt files.',
 };
 
 export default function RootLayout({
